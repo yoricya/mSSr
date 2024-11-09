@@ -5,3 +5,6 @@ gemini.google.com
 =google.com
 =www.google.com
 ogs.google.com
+revenuecat
+us.sentry.io
+browser-intake-datadoghq.com

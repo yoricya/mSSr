@@ -61,17 +61,20 @@ func TidyConnect(conn net.Conn, logStr string, host string) {
 var isVerbose = false
 var isUsingBanList = false
 var server_port = 8080
+var server_pac_addr = ""
 
 func main() {
 	p := flag.Int("port", 8080, "Proxy Server port")
 	isB := flag.Bool("banlist", false, "Using ban list?")
 	v := flag.Bool("v", false, "Verbose?")
+	pacAddr := flag.String("pac", "", "Using PAC Autoconf? Set your global ip of proxy")
+
 	ver := flag.Bool("version", false, "Version")
 
 	flag.Parse()
 
 	if *ver {
-		fmt.Println("V0.1")
+		fmt.Println("V0.2")
 		return
 	}
 
@@ -79,6 +82,7 @@ func main() {
 
 	isVerbose = *v
 	server_port = *p
+	server_pac_addr = *pacAddr
 
 	//GOOS=linux GOARCH=amd64 go build
 
