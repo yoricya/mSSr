@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	_ "github.com/wzshiming/shadowsocks/init"
-	_ "github.com/wzshiming/shadowsocks/stream/chacha20"
 	"io"
 	"log"
 	"math/rand"
@@ -33,22 +31,19 @@ func TidyConnect(conn net.Conn, logStr string, host string) {
 	}
 	//VLog END
 
+	if !strings.Contains(host, ":") {
+		host = host + ":443"
+	}
+
 	var targetConn net.Conn
 	var err error
 	if isProxing {
-		dialler, e := GetProxyDialler(host)
-		if e != nil {
-			if isVerbose {
-				log.Println("Error while get proxy dialer for '"+host+"' : ", e)
-			}
-			return
-		}
-		targetConn, err = dialler.Dial("tcp", host)
+		targetConn, err = DialWithProxy("tcp", host)
 	} else {
 		targetConn, err = net.Dial("tcp", host)
 	}
 
-	if isVerbose && err != nil {
+	if err != nil {
 		log.Println(logStr+" ERROR: ", err)
 		return
 	}
@@ -74,7 +69,7 @@ func main() {
 	flag.Parse()
 
 	if *ver {
-		fmt.Println("V0.2")
+		fmt.Println("V0.3")
 		return
 	}
 
@@ -111,7 +106,7 @@ func main() {
 				if err == nil {
 					fmt.Println("Avail proxy: " + t)
 				} else {
-					fmt.Println("Not Avail proxy: " + t)
+					fmt.Println("Not Avail proxy: " + t + ".\n" + err.Error())
 				}
 				wg.Done()
 			}()
