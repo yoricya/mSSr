@@ -142,6 +142,10 @@ func AddProxy(proxyLink string) error {
 
 	//Get Ip
 	rd, e := io.ReadAll(b.Body)
+	if e != nil {
+		return err
+	}
+
 	remoteIpOfProxy := string(rd)
 	endTime := time.Now().UnixMilli() - startTime
 
@@ -240,14 +244,13 @@ func DialWithProxy(net, originHost string) (net.Conn, error) {
 }
 
 func CreateDialler(proxy *Proxy, host string, port uint16) (net.Conn, error) {
-	//Start Dial Proxy Server
-
 	//Create and send Socks Header
 	header, err := createSocksHeader(host, port)
 	if err != nil {
 		return nil, err
 	}
 
+	//Start Dial Proxy Server
 	conn, err := net.Dial("tcp", proxy.proxyHost)
 	if err != nil {
 		return nil, err
