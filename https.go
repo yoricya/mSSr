@@ -2,49 +2,40 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
 
-func parseHTTPRequest(conn net.Conn) (method string, host string, err error) {
+func parseHTTPRequest(conn net.Conn) (method, host, original string, err error) {
 	buffer := make([]byte, 1024)
 	n, err := conn.Read(buffer)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
 	request := string(buffer[:n])
 	lines := strings.Split(request, "\r\n")
 	if len(lines) == 0 {
-		return "", "", fmt.Errorf("invalid request")
+		return "", "", "", fmt.Errorf("invalid request")
 	}
 
 	parts := strings.Fields(lines[0])
 	if len(parts) < 2 {
-		return "", "", fmt.Errorf("invalid request line")
+		return "", "", "", fmt.Errorf("invalid request line")
 	}
 
-	method, host = parts[0], parts[1]
-
-	if method != "GET" {
-		for _, line := range lines[1:] {
-			if strings.HasPrefix(line, "Host:") {
-				host = strings.TrimSpace(strings.TrimPrefix(line, "Host:"))
-				break
-			}
-		}
-	}
-
-	return method, host, nil
+	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), request, nil
 }
 
 func handleHTTPSConnection(conn net.Conn) {
 	defer conn.Close()
 
-	method, h, err := parseHTTPRequest(conn)
+	method, h, original, err := parseHTTPRequest(conn)
 	if err != nil {
 		log.Println("[HTTP] Error reading request:", err)
 		conn.Write([]byte("HTTP/1.1 426 Upgrade Required\r\n"))
@@ -57,11 +48,42 @@ func handleHTTPSConnection(conn net.Conn) {
 		if h == "/proxy.pac" {
 			handlePac(conn)
 		}
+
+		if h[:7] == "http://" {
+			handleHttpDirect(h, original, conn)
+		}
+
 		return
 	} else if method == http.MethodConnect {
 		handleProxy(h, conn)
 		return
 	}
+}
+
+func handleHttpDirect(host, original string, conn net.Conn) {
+	u, err := url.Parse(host)
+	if err != nil {
+		log.Println("[HTTP-DIRECT] Error reading url: ", err)
+		conn.Write([]byte("HTTP/1.1 426 Upgrade Required\r\n"))
+		conn.Write([]byte("Upgrade: HTTP/1.1\r\n"))
+		conn.Write([]byte("Connection: Upgrade\r\n\r\n"))
+		return
+	}
+
+	if !strings.Contains(u.Host, ":") {
+		u.Host = u.Host + ":80"
+	}
+
+	targetConn, err := net.Dial("tcp", u.Host)
+	if err != nil {
+		return
+	}
+	defer targetConn.Close()
+
+	targetConn.Write([]byte(original))
+
+	go io.Copy(targetConn, conn)
+	io.Copy(conn, targetConn)
 }
 
 func handleProxy(host string, conn net.Conn) {

@@ -21,7 +21,7 @@ func extractSSLinkData(ssLink string) (cipher, password, host string, err error)
 	ssLink = strings.TrimSpace(ssLink)
 
 	if ssLink[:5] != "ss://" {
-		return "", "", "", fmt.Errorf("Not a SS:// Link!")
+		return "", "", "", fmt.Errorf("Not a shadowsocks Link!")
 	}
 	ssLink = ssLink[5:]
 
