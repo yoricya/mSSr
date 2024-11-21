@@ -49,7 +49,7 @@ func handleHTTPSConnection(conn net.Conn) {
 			handlePac(conn)
 		}
 
-		if h[:7] == "http://" {
+		if len(h) > 7 && h[:7] == "http://" {
 			handleHttpDirect(h, original, conn)
 		}
 
@@ -61,9 +61,9 @@ func handleHTTPSConnection(conn net.Conn) {
 }
 
 func handleHttpDirect(host, original string, conn net.Conn) {
-	u, err := url.Parse(host)
-	if err != nil {
-		log.Println("[HTTP-DIRECT] Error reading url: ", err)
+	u, er := url.Parse(host)
+	if er != nil {
+		log.Println("[HTTP-DIRECT] Error reading url: ", er)
 		conn.Write([]byte("HTTP/1.1 426 Upgrade Required\r\n"))
 		conn.Write([]byte("Upgrade: HTTP/1.1\r\n"))
 		conn.Write([]byte("Connection: Upgrade\r\n\r\n"))
@@ -74,11 +74,22 @@ func handleHttpDirect(host, original string, conn net.Conn) {
 		u.Host = u.Host + ":80"
 	}
 
-	targetConn, err := net.Dial("tcp", u.Host)
+	var isProxing = !isUsingBanList
+	if isUsingBanList && BanList.Contains(u.Host) {
+		isProxing = true
+	}
+
+	var targetConn net.Conn
+	var err error
+	if isProxing {
+		targetConn, err = DialWithProxy("tcp", u.Host)
+	} else {
+		targetConn, err = net.Dial("tcp", u.Host)
+	}
+
 	if err != nil {
 		return
 	}
-	defer targetConn.Close()
 
 	targetConn.Write([]byte(original))
 

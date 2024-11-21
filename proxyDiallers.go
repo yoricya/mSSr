@@ -206,8 +206,6 @@ func DialWithProxy(net, originHost string) (net.Conn, error) {
 		if err == nil {
 			return conn, nil
 		}
-
-		fmt.Println(err)
 	}
 
 	DImu.Lock()
