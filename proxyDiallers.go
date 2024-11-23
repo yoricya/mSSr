@@ -15,8 +15,7 @@ import (
 	"time"
 )
 
-//github.com/wzshiming/shadowsocks
-
+// extractSSLinkData - parsing Shadowsocks link
 func extractSSLinkData(ssLink string) (cipher, password, host string, err error) {
 	ssLink = strings.TrimSpace(ssLink)
 
@@ -62,6 +61,7 @@ func extractSSLinkData(ssLink string) (cipher, password, host string, err error)
 	return cipher, password, host, nil
 }
 
+// createSocksHeader - Creating SOCKS5 header
 func createSocksHeader(ipAddress string, port uint16) ([]byte, error) {
 	var packet []byte
 
@@ -88,6 +88,7 @@ func createSocksHeader(ipAddress string, port uint16) ([]byte, error) {
 	return packet, nil
 }
 
+// AddProxy - Parse link, check and add proxy
 func AddProxy(proxyLink string) error {
 	//Parse SS link
 	cipherTp, password, host, e := extractSSLinkData(proxyLink)
@@ -115,7 +116,11 @@ func AddProxy(proxyLink string) error {
 	if err != nil {
 		return err
 	}
-	conn.Write(header)
+
+	_, err = conn.Write(header)
+	if err != nil {
+		return err
+	}
 
 	//Create Dial Context With Proxy Conn
 	dialContext := func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -167,6 +172,7 @@ func AddProxy(proxyLink string) error {
 	return nil
 }
 
+// Proxy - struct of proxy
 type Proxy struct {
 	SSlink   string
 	pingTime int32
@@ -178,6 +184,7 @@ type Proxy struct {
 	mutex sync.RWMutex
 }
 
+// CachedProxy - struct of cached by domain proxy
 type CachedProxy struct {
 	proxy *Proxy
 
@@ -187,16 +194,21 @@ type CachedProxy struct {
 	mutex sync.RWMutex
 }
 
+// AllProxies - All loaded proxies
 var AllProxies []*Proxy
 var Amu sync.RWMutex
 
+// distribInt - Number for distributing the proxy
 var distribInt = 0
 var DImu sync.Mutex
 
+// CachedWithDomainProxies - Cached by domain name proxy
 var CachedWithDomainProxies = make(map[string]*CachedProxy)
 var Cmu sync.RWMutex
 
-func DialWithProxy(net, originHost string) (net.Conn, error) {
+// DialWithProxy - Search working proxy, cache and return Conn dialler
+func DialWithProxy(netType, originHost string) (net.Conn, error) {
+	//Get Proxy From Cache
 	Cmu.RLock()
 	cprx, is := CachedWithDomainProxies[originHost]
 	Cmu.RUnlock()
@@ -207,26 +219,29 @@ func DialWithProxy(net, originHost string) (net.Conn, error) {
 			return conn, nil
 		}
 	}
+	//Is cached proxy not available
 
-	DImu.Lock()
-	i := distribInt
-	DImu.Unlock()
-
-	i++
-	if i > len(AllProxies)-1 {
-		i = 0
-	}
-
-	DImu.Lock()
-	distribInt = i
-	DImu.Unlock()
-
-	Amu.RLock()
-	prx := AllProxies[i]
-	Amu.RUnlock()
-
+	//Parse host:port
 	host, port := parseHost(originHost)
 
+	//Search working proxy
+	var err error
+	var prx *Proxy
+	var dialler net.Conn
+	var iterations = 0
+
+	for (err != nil || prx == nil) && iterations < len(AllProxies) {
+		iterations++
+
+		//Get proxy by number distrib
+		prx, _ = getProxyByDistribInt()
+
+		//Create dialler by proxy
+		dialler, err = CreateDialler(cprx.proxy, cprx.host, cprx.port)
+	}
+	//End
+
+	//Create cached proxy
 	cprx = &CachedProxy{
 		proxy: prx,
 		host:  host,
@@ -234,13 +249,39 @@ func DialWithProxy(net, originHost string) (net.Conn, error) {
 		mutex: sync.RWMutex{},
 	}
 
+	//Cache proxy
 	Cmu.Lock()
 	CachedWithDomainProxies[originHost] = cprx
 	Cmu.Unlock()
 
-	return CreateDialler(cprx.proxy, cprx.host, cprx.port)
+	return dialler, err
 }
 
+// getProxyByDistribInt - distribute proxy
+func getProxyByDistribInt() (*Proxy, int) {
+	//Work distribution number
+	DImu.Lock()
+	i := distribInt
+	DImu.Unlock()
+
+	i++
+	if i > len(AllProxies)-1 { //Reset if num > proxies count
+		i = 0
+	}
+
+	DImu.Lock()
+	distribInt = i
+	DImu.Unlock()
+	//End
+
+	Amu.RLock()
+	prx := AllProxies[i]
+	Amu.RUnlock()
+
+	return prx, i
+}
+
+// CreateDialler - Create dialler, send socks5 header to proxy and return ready Conn
 func CreateDialler(proxy *Proxy, host string, port uint16) (net.Conn, error) {
 	//Create and send Socks Header
 	header, err := createSocksHeader(host, port)
@@ -256,11 +297,16 @@ func CreateDialler(proxy *Proxy, host string, port uint16) (net.Conn, error) {
 
 	//Create Cipher Dialler with conn
 	conn = proxy.cipher.StreamConn(conn)
-	conn.Write(header)
+
+	_, err = conn.Write(header)
+	if err != nil {
+		return nil, err
+	}
 
 	return conn, nil
 }
 
+// parseHost - Parse host:port (string) to host (string) and port (int)
 func parseHost(origin string) (host string, port int) {
 	for i := len(origin) - 1; i > 0; i-- {
 		if origin[i] == ':' {

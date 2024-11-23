@@ -48,8 +48,11 @@ func TidyConnect(conn net.Conn, logStr string, host string) {
 		return
 	}
 
-	go io.Copy(targetConn, conn)
-	defer targetConn.Close()
+	go func() {
+		defer targetConn.Close()
+		io.Copy(targetConn, conn)
+	}()
+
 	io.Copy(conn, targetConn)
 }
 
@@ -69,7 +72,7 @@ func main() {
 	flag.Parse()
 
 	if *ver {
-		fmt.Println("V0.3")
+		fmt.Println("V0.4")
 		return
 	}
 
