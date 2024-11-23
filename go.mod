@@ -1,4 +1,4 @@
-module tunProxer
+module mSSr
 
 go 1.23.0
 
