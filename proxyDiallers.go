@@ -237,7 +237,7 @@ func DialWithProxy(netType, originHost string) (net.Conn, error) {
 		prx, _ = getProxyByDistribInt()
 
 		//Create dialler by proxy
-		dialler, err = CreateDialler(cprx.proxy, cprx.host, cprx.port)
+		dialler, err = CreateDialler(prx, host, uint16(port))
 	}
 	//End
 
