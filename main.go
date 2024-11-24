@@ -48,7 +48,7 @@ func TidyConnect(conn net.Conn, logStr string, originHost string) {
 	}
 
 	if err != nil {
-		log.Println(logStr+" ERROR: ", err)
+		log.Println(GetPrefix("TidyConnect", colorBrightBlue, typeColorError)+logStr+" ERROR: ", err)
 		return
 	}
 
@@ -90,7 +90,7 @@ func main() {
 
 	//Proxy Worker
 	{
-		fmt.Println("Preparing and checking proxies...")
+		log.Println(GetPrefix("PROXIES WORKER", colorBrightPurple, typeColorInfo) + "Preparing and checking proxies...")
 		file, err := os.Open("proxieslist.txt")
 		if err != nil {
 			log.Fatal(err)
@@ -117,13 +117,17 @@ func main() {
 			go func() {
 				err := AddProxy(t)
 				if err == nil {
-					fmt.Println("Avail proxy: " + t)
+					log.Println(GetPrefix("PROXIES WORKER", colorBrightPurple, typeColorDone) + "Avail proxy: " + t)
 
 					mu.Lock()
 					workedProxies++
 					mu.Unlock()
 				} else {
-					fmt.Println("Not Avail proxy: " + t + ".\n" + err.Error())
+					var e = ""
+					if isVerbose {
+						e = "\n" + err.Error()
+					}
+					log.Println(GetPrefix("PROXIES WORKER", colorBrightPurple, typeColorWarn) + "Not Avail proxy: " + t + "." + e)
 				}
 				wg.Done()
 			}()
@@ -132,12 +136,12 @@ func main() {
 		file.Close()
 		wg.Wait()
 
-		fmt.Printf("[PROXIES WORKER] Available Proxies/All Proxies: %d/%d \n", workedProxies, allProxies)
+		log.Printf(GetPrefix("PROXIES WORKER", colorBrightPurple, typeColorDone)+"Proxies count: Available/All - %d/%d \n", workedProxies, allProxies)
 	}
 
 	//Ban list worker
 	if *isB {
-		fmt.Println("Preparing banlist...")
+		log.Println(GetPrefix("BANLIST WORKER", colorBrightPurple, typeColorInfo) + "Preparing banlist...")
 		isUsingBanList = true
 		file, err := os.Open("banlist.txt")
 		if err != nil {
@@ -145,6 +149,8 @@ func main() {
 		}
 
 		scanner := bufio.NewScanner(file)
+
+		count := 0
 
 		for scanner.Scan() {
 			t := scanner.Text()
@@ -154,12 +160,14 @@ func main() {
 				continue
 			}
 
+			count++
+
 			BanList.Add(t)
-			fmt.Println("Add to banlist: " + t)
+			log.Println(GetPrefix("BANLIST WORKER", colorBrightPurple, typeColorInfo) + "Add to banlist: " + t)
 		}
 
 		file.Close()
-		//fmt.Printf("[BANLIST WORKER] Banned count: %d/%d\n", workedProxies, allProxies)
+		log.Printf(GetPrefix("BANLIST WORKER", colorBrightPurple, typeColorDone)+"Banned sites count: %d", count)
 	}
 
 	httpProxy(server_port)

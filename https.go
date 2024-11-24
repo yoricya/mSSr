@@ -37,7 +37,7 @@ func handleHTTPSConnection(conn net.Conn) {
 
 	method, h, original, err := parseHTTPRequest(conn)
 	if err != nil {
-		log.Println("[HTTP] Error reading request:", err)
+		log.Println(GetPrefix("mSS - router", colorBrightBlue, typeColorError)+"Can't reading request:", err)
 		conn.Write([]byte("HTTP/1.1 426 Upgrade Required\r\n"))
 		conn.Write([]byte("Upgrade: HTTP/1.1\r\n"))
 		conn.Write([]byte("Connection: Upgrade\r\n\r\n"))
@@ -63,7 +63,7 @@ func handleHTTPSConnection(conn net.Conn) {
 func handleHttpDirect(host, original string, conn net.Conn) {
 	u, er := url.Parse(host)
 	if er != nil {
-		log.Println("[HTTP-DIRECT] Error reading url: ", er)
+		log.Println(GetPrefix("HTTP-Handle", colorBrightPurple, typeColorWarn)+"Can't reading url: ", er)
 		conn.Write([]byte("HTTP/1.1 426 Upgrade Required\r\n"))
 		conn.Write([]byte("Upgrade: HTTP/1.1\r\n"))
 		conn.Write([]byte("Connection: Upgrade\r\n\r\n"))
@@ -142,7 +142,7 @@ var https_port int
 func httpProxy(port int) {
 	//Start server
 	https_port = port
-	log.Println("tunProxy https proxy started at 0.0.0.0:" + strconv.Itoa(port))
+	log.Println(GetPrefix("mSS - router", colorBrightBlue, typeColorDone) + "http/s proxy started at 0.0.0.0:" + strconv.Itoa(port))
 
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(port))
 	if err != nil {
@@ -154,7 +154,7 @@ func httpProxy(port int) {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			log.Println("Error accepting connection:", err)
+			log.Println(GetPrefix("mSS - router", colorBrightBlue, typeColorError)+"Can't accepting connection:", err)
 			continue
 		}
 		go handleHTTPSConnection(conn)

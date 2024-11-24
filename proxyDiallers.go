@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/shadowsocks/go-shadowsocks2/core"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"strconv"
@@ -247,7 +248,7 @@ func DialWithProxy(netType, host string, port uint16) (net.Conn, error) {
 	//is not found available proxies
 	if err != nil {
 		if isVerbose {
-			fmt.Println("[PROXY DIALLERS] origin= "+host+(strconv.Itoa(int(port)))+":", err)
+			log.Println(GetPrefix("PROXY DIALLERS", colorBrightPurple, typeColorWarn)+"origin= "+host+(strconv.Itoa(int(port)))+":", err)
 		}
 
 		return nil, errors.New("No available proxy found.")
