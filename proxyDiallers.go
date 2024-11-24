@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"github.com/shadowsocks/go-shadowsocks2/core"
 	"io"
@@ -200,17 +201,17 @@ var Amu sync.RWMutex
 
 // distribInt - Number for distributing the proxy
 var distribInt = 0
-var DImu sync.Mutex
+var DImu sync.RWMutex
 
 // CachedWithDomainProxies - Cached by domain name proxy
 var CachedWithDomainProxies = make(map[string]*CachedProxy)
 var Cmu sync.RWMutex
 
 // DialWithProxy - Search working proxy, cache and return Conn dialler
-func DialWithProxy(netType, originHost string) (net.Conn, error) {
-	//Get Proxy From Cache
+func DialWithProxy(netType, host string, port uint16) (net.Conn, error) {
+	//Get Proxy From Cache:
 	Cmu.RLock()
-	cprx, is := CachedWithDomainProxies[originHost]
+	cprx, is := CachedWithDomainProxies[host]
 	Cmu.RUnlock()
 
 	if is {
@@ -219,60 +220,66 @@ func DialWithProxy(netType, originHost string) (net.Conn, error) {
 			return conn, nil
 		}
 	}
-	//Is cached proxy not available
+	//Is cached proxy not available:
 
-	//Parse host:port
-	host, port := parseHost(originHost)
-
-	//Search working proxy
+	//Search working proxy <-------------------------
 	var err error
 	var prx *Proxy
 	var dialler net.Conn
 	var iterations = 0
 
+	//get distrib int
+	DImu.RLock()
+	curIndex := distribInt
+	DImu.RUnlock()
+
 	for (err != nil || prx == nil) && iterations < len(AllProxies) {
 		iterations++
 
 		//Get proxy by number distrib
-		prx, _ = getProxyByDistribInt()
+		prx, curIndex = getProxyByDistribInt(curIndex)
+		curIndex++
 
 		//Create dialler by proxy
-		dialler, err = CreateDialler(prx, host, uint16(port))
+		dialler, err = CreateDialler(prx, host, port)
 	}
-	//End
+
+	//is not found available proxies
+	if err != nil {
+		if isVerbose {
+			fmt.Println("[PROXY DIALLERS] origin= "+host+(strconv.Itoa(int(port)))+":", err)
+		}
+
+		return nil, errors.New("No available proxy found.")
+	}
+
+	//set distrib int
+	DImu.Lock()
+	distribInt = curIndex
+	DImu.Unlock()
+	//End ------------------------->
 
 	//Create cached proxy
 	cprx = &CachedProxy{
 		proxy: prx,
 		host:  host,
-		port:  uint16(port),
+		port:  port,
 		mutex: sync.RWMutex{},
 	}
 
 	//Cache proxy
 	Cmu.Lock()
-	CachedWithDomainProxies[originHost] = cprx
+	CachedWithDomainProxies[host] = cprx
 	Cmu.Unlock()
 
 	return dialler, err
 }
 
 // getProxyByDistribInt - distribute proxy
-func getProxyByDistribInt() (*Proxy, int) {
-	//Work distribution number
-	DImu.Lock()
-	i := distribInt
-	DImu.Unlock()
-
-	i++
-	if i > len(AllProxies)-1 { //Reset if num > proxies count
-		i = 0
+func getProxyByDistribInt(i int) (*Proxy, int) {
+	if i > len(AllProxies)-1 {
+		i = 0 //Reset if i > proxies count
 	}
-
-	DImu.Lock()
-	distribInt = i
-	DImu.Unlock()
-	//End
 
 	Amu.RLock()
 	prx := AllProxies[i]
@@ -298,6 +305,7 @@ func CreateDialler(proxy *Proxy, host string, port uint16) (net.Conn, error) {
 	//Create Cipher Dialler with conn
 	conn = proxy.cipher.StreamConn(conn)
 
+	//Write header
 	_, err = conn.Write(header)
 	if err != nil {
 		return nil, err
@@ -311,7 +319,13 @@ func parseHost(origin string) (host string, port int) {
 	for i := len(origin) - 1; i > 0; i-- {
 		if origin[i] == ':' {
 			host = strings.TrimSpace(origin[:i])
-			port, _ = strconv.Atoi(strings.TrimSpace(origin[i+1:]))
+
+			var e error
+			port, e = strconv.Atoi(strings.TrimSpace(origin[i+1:]))
+			if e != nil {
+				port = 443
+			}
+
 			break
 		}
 	}

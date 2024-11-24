@@ -19,7 +19,15 @@ var BanList = StringList{
 	cached: make(map[string]bool),
 }
 
-func TidyConnect(conn net.Conn, logStr string, host string) {
+func TidyConnect(conn net.Conn, logStr string, originHost string) {
+	if !strings.Contains(originHost, ":") {
+		originHost = originHost + ":443"
+	}
+
+	//Parse host:port
+	host, port := parseHost(originHost)
+
+	//Check is host contains in ban list
 	var isProxing = !isUsingBanList
 	if isUsingBanList && BanList.Contains(host) {
 		isProxing = true
@@ -31,16 +39,12 @@ func TidyConnect(conn net.Conn, logStr string, host string) {
 	}
 	//VLog END
 
-	if !strings.Contains(host, ":") {
-		host = host + ":443"
-	}
-
 	var targetConn net.Conn
 	var err error
 	if isProxing {
-		targetConn, err = DialWithProxy("tcp", host)
+		targetConn, err = DialWithProxy("tcp", host, uint16(port))
 	} else {
-		targetConn, err = net.Dial("tcp", host)
+		targetConn, err = net.Dial("tcp", originHost)
 	}
 
 	if err != nil {
@@ -95,6 +99,10 @@ func main() {
 		scanner := bufio.NewScanner(file)
 		var wg sync.WaitGroup
 
+		var workedProxies = 0
+		var allProxies = 0
+		var mu sync.Mutex
+
 		for scanner.Scan() {
 			t := scanner.Text()
 			wg.Add(1)
@@ -104,10 +112,16 @@ func main() {
 				continue
 			}
 
+			allProxies++
+
 			go func() {
 				err := AddProxy(t)
 				if err == nil {
 					fmt.Println("Avail proxy: " + t)
+
+					mu.Lock()
+					workedProxies++
+					mu.Unlock()
 				} else {
 					fmt.Println("Not Avail proxy: " + t + ".\n" + err.Error())
 				}
@@ -117,6 +131,8 @@ func main() {
 
 		file.Close()
 		wg.Wait()
+
+		fmt.Printf("[PROXIES WORKER] Available Proxies/All Proxies: %d/%d \n", workedProxies, allProxies)
 	}
 
 	//Ban list worker
@@ -143,6 +159,7 @@ func main() {
 		}
 
 		file.Close()
+		//fmt.Printf("[BANLIST WORKER] Banned count: %d/%d\n", workedProxies, allProxies)
 	}
 
 	httpProxy(server_port)

@@ -74,15 +74,18 @@ func handleHttpDirect(host, original string, conn net.Conn) {
 		u.Host = u.Host + ":80"
 	}
 
+	//Parse host:port
+	host, port := parseHost(u.Host)
+
 	var isProxing = !isUsingBanList
-	if isUsingBanList && BanList.Contains(u.Host) {
+	if isUsingBanList && BanList.Contains(host) {
 		isProxing = true
 	}
 
 	var targetConn net.Conn
 	var err error
 	if isProxing {
-		targetConn, err = DialWithProxy("tcp", u.Host)
+		targetConn, err = DialWithProxy("tcp", host, uint16(port))
 	} else {
 		targetConn, err = net.Dial("tcp", u.Host)
 	}
@@ -93,7 +96,11 @@ func handleHttpDirect(host, original string, conn net.Conn) {
 
 	targetConn.Write([]byte(original))
 
-	go io.Copy(targetConn, conn)
+	go func() {
+		defer targetConn.Close()
+		io.Copy(targetConn, conn)
+	}()
+
 	io.Copy(conn, targetConn)
 }
 
