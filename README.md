@@ -40,3 +40,10 @@ Usage of ./multiShadowsocks
   -version
         Print version
 ```
+
+### Todo list
+
+- [ ] - Автоматический парсинг прокси с `https://outlinekeys.com/`.
+- [ ] - Разделение соединений по группам _(Пример: все пункты в banlist.txt связанные с spotify должны идти через один и тот же прокси)_.
+- [ ] - Поддержка UDP.
+- [ ] - Поддержка SOCKS5 Proxy.
